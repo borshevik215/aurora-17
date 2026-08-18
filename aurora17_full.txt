@@ -1,0 +1,2474 @@
+═══════════════════════════════════════════════════════════════
+  AURORA-17 FULL PROJECT DUMP
+  Generated: Sun Aug 16 11:30:57 AM MSK 2026
+═══════════════════════════════════════════════════════════════
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: Cargo.toml
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[package]
+name = "aurora17"
+version = "0.5.0"
+edition = "2021"
+
+[dependencies]
+macroquad = { version = "0.4", features = ["audio"] }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: README.md
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# AURORA-17 v0.5
+
+A terminal-based deep-space operations game.
+
+## Requirements
+
+- Rust
+- Cargo
+- Python 3 for the project builder
+
+Arch Linux:
+
+    sudo pacman -S rust python
+
+## Build
+
+    python build-aurora.py
+
+The builder creates:
+
+    aurora17-v0.5/
+
+Then:
+
+    cd aurora17-v0.5
+    cargo run --release
+
+## Mission 01
+
+    diagnose
+    tracker
+    calibrate +0.084 -0.031
+    lock
+    depart
+
+## Terminal
+
+    help
+    status
+    diagnose
+    nav
+    tracker
+    calibrate
+    lock
+    depart
+    engine
+    comms
+    scan
+    logs
+    clear
+    about
+
+Mouse wheel:
+    terminal scrolling
+
+PageUp / PageDown:
+    terminal scrolling
+
+Up / Down:
+    command history
+
+## Sensory system
+
+v0.5 focuses on presentation rather than
+new mission mechanics.
+
+The ship ambience is made from independent
+continuous layers.
+
+The terminal is rendered through an offscreen
+CRT pass with:
+
+- barrel distortion
+- scanlines
+- phosphor shimmer
+- vignette
+- green phosphor response
+
+Rare anomalies can produce short tracking
+disturbances.
+
+Events are intentionally sparse.
+
+Not every anomaly produces a diagnostic
+notification.
+
+The intended horror comes from the contrast
+between familiar machine behaviour and small
+unexpected deviations.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: CHANGELOG.md
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# AURORA-17 CHANGELOG
+
+## v0.5.0 — SENSORY SYSTEM
+
+### Added
+
+- Independent continuous ship ambience layers:
+  - reactor/electrical hum
+  - ventilation
+- Physical terminal key-click audio.
+- Actual CRT render pass using an offscreen render target.
+- Subtle barrel distortion.
+- CRT vignette.
+- Phosphor shimmer.
+- Persistent scanline refresh.
+- Rare display flicker.
+- Rare short tracking disturbance.
+- Event history tracking.
+- Irregular event scheduling.
+- Event repetition protection.
+- Ambient-only anomaly events.
+- Non-diagnostic anomaly events.
+
+### Changed
+
+- Ambient audio loops were regenerated as long periodic waveforms to remove the audible half-second loop interruption.
+- Event intervals were increased substantially and randomized.
+- Event selection now avoids recently seen event types.
+- Not every event now produces a diagnostic notification.
+- Sensor telemetry anomalies can produce a short audiovisual disturbance.
+- Terminal key audio is significantly quieter than command/relay audio.
+
+### Fixed
+
+- Unused `key_click` method warning.
+- Unused `EventKind` field warning.
+- CRT shader is now actually applied to the terminal image.
+- `clear` removes both visible and queued terminal output.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: assets/shaders/crt.frag
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#version 100
+
+precision lowp float;
+
+varying lowp vec2 uv;
+
+uniform sampler2D screen_texture;
+uniform float time;
+
+void main() {
+    vec2 p = uv * 2.0 - 1.0;
+
+    float r2 = dot(p, p);
+
+    p *= 1.0 + 0.055 * r2;
+
+    vec2 warped =
+        p * 0.5 + 0.5;
+
+    vec3 color =
+        texture2D(
+            screen_texture,
+            warped
+        ).rgb;
+
+    float scan =
+        0.975
+        + 0.025
+        * sin(
+            warped.y * 900.0
+        );
+
+    color *= scan;
+
+    float shimmer =
+        1.0
+        + 0.009
+        * sin(time * 5.7);
+
+    color *= shimmer;
+
+    color.r *= 0.88;
+    color.g *= 1.02;
+    color.b *= 0.88;
+
+    float vignette =
+        1.0
+        - smoothstep(
+            0.35,
+            1.10,
+            r2
+        );
+
+    color *=
+        0.80
+        + 0.20 * vignette;
+
+    gl_FragColor =
+        vec4(color, 1.0);
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: src/main.rs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+mod audio;
+mod commands;
+mod engine;
+mod game;
+mod ship;
+mod terminal;
+
+use macroquad::prelude::*;
+
+fn window_conf() -> Conf {
+    Conf {
+        window_title:
+            "AURORA-17 // REMOTE OPERATIONS TERMINAL"
+                .to_owned(),
+
+        window_width: 1280,
+        window_height: 720,
+
+        window_resizable: true,
+        high_dpi: true,
+
+        ..Default::default()
+    }
+}
+
+#[macroquad::main(window_conf)]
+async fn main() {
+    let mut game =
+        game::Game::new().await;
+
+    loop {
+        game.update();
+        game.draw();
+
+        next_frame().await;
+    }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: src/game.rs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+use macroquad::prelude::*;
+use macroquad::camera::Camera2D;
+use macroquad::material::{
+    load_material,
+    Material,
+    MaterialParams,
+};
+
+use crate::{
+    audio::AudioDirector,
+    commands::execute,
+    engine::{
+        events::{
+            Event,
+            EventKind,
+        },
+        scheduler::EventScheduler,
+        state::GameState,
+    },
+    ship::Ship,
+    terminal::Terminal,
+};
+
+pub struct Game {
+    terminal: Terminal,
+    ship: Ship,
+    state: GameState,
+    scheduler: EventScheduler,
+    audio: AudioDirector,
+
+    target: RenderTarget,
+    crt: Material,
+
+    elapsed: f32,
+    tracking_timer: f32,
+}
+
+impl Game {
+    pub async fn new() -> Self {
+        let mut terminal = Terminal::new();
+
+        terminal.print(&[
+            "╔══════════════════════════════════════════════════════════╗",
+            "║        DEEP SPACE AUTONOMOUS VESSEL CONTROL              ║",
+            "║                 REMOTE TERMINAL v5.0                    ║",
+            "╚══════════════════════════════════════════════════════════╝",
+            "",
+            "CONNECTION ESTABLISHED",
+            "",
+            "VESSEL............... AURORA-17",
+            "MISSION.............. DEEP SPACE TRANSIT",
+            "UPLINK............... 12.4 kb/s",
+            "AUTOPILOT............ STANDBY",
+            "",
+            "BOOT SEQUENCE COMPLETE",
+            "",
+            "WARNING:",
+            "NAVIGATION SUBSYSTEM REQUIRES OPERATOR INPUT.",
+            "",
+            "TYPE 'HELP' FOR AVAILABLE COMMANDS.",
+        ]);
+
+        let mut audio = AudioDirector::new().await;
+        audio.start_ambient();
+
+        let target = render_target(1280, 720);
+
+        /*
+         * Macroquad 0.4.x expects ShaderSource as the
+         * first argument of load_material().
+         *
+         * _Time is a built-in Macroquad uniform, so we
+         * don't need to declare our own time uniform.
+         */
+        let crt = load_material(
+            ShaderSource::Glsl {
+                vertex: VERTEX_SHADER,
+                fragment: FRAGMENT_SHADER,
+            },
+            MaterialParams {
+                ..Default::default()
+            },
+        )
+        .expect("Failed to create CRT material");
+
+        Self {
+            terminal,
+            ship: Ship::new(),
+            state: GameState::new(0x7F2A91C4),
+            scheduler: EventScheduler::new(),
+            audio,
+            target,
+            crt,
+            elapsed: 0.0,
+            tracking_timer: 0.0,
+        }
+    }
+
+    pub fn update(&mut self) {
+        let dt = get_frame_time();
+
+        self.elapsed += dt;
+        self.state.tick(dt);
+
+        if let Some(event) =
+            self.scheduler.update(&mut self.state)
+        {
+            self.apply_event(event);
+        }
+
+        self.tracking_timer =
+            (self.tracking_timer - dt).max(0.0);
+
+        let input = self.terminal.update_input();
+
+        if input.key_pressed {
+            self.audio.key_click();
+        }
+
+        if let Some(command) = input.command {
+            self.audio.command();
+
+            let result = execute(
+                &command,
+                &mut self.ship,
+                &mut self.state,
+            );
+
+            if result.clear {
+                self.terminal.clear();
+            }
+
+            if result.resolved_diagnostic {
+                self.state.diagnostic_attention = false;
+            }
+
+            self.terminal.queue(&result.lines);
+        }
+    }
+
+    fn apply_event(&mut self, event: Event) {
+        match event.kind {
+            EventKind::AmbientShift => {}
+
+            EventKind::Communications
+            | EventKind::ClockDesync
+            | EventKind::PowerTransient => {
+                self.audio.anomaly();
+            }
+
+            EventKind::PhantomLog => {}
+
+            EventKind::SensorFlicker => {
+                self.audio.anomaly();
+                self.tracking_timer = 0.20;
+            }
+        }
+
+        let mut lines = vec![
+            String::new()
+        ];
+
+        for line in event.lines {
+            lines.push(line.to_string());
+        }
+
+        self.terminal.queue(&lines);
+    }
+
+    pub fn draw(&mut self) {
+        /*
+         * Render the terminal into an offscreen
+         * framebuffer first.
+         */
+        set_camera(&Camera2D {
+            render_target: Some(
+                self.target.clone()
+            ),
+
+            zoom: vec2(
+                2.0 / 1280.0,
+                2.0 / 720.0,
+            ),
+
+            ..Default::default()
+        });
+
+        self.terminal.draw_terminal(
+            self.elapsed,
+            self.state.diagnostic_attention,
+        );
+
+        set_default_camera();
+
+        /*
+         * Now render the framebuffer through
+         * the CRT shader.
+         */
+        clear_background(
+            Color::new(
+                0.002,
+                0.003,
+                0.002,
+                1.0,
+            )
+        );
+
+        gl_use_material(&self.crt);
+
+        draw_texture_ex(
+            &self.target.texture,
+            0.0,
+            0.0,
+            WHITE,
+            DrawTextureParams {
+                dest_size: Some(vec2(
+                    screen_width(),
+                    screen_height(),
+                )),
+
+                ..Default::default()
+            },
+        );
+
+        gl_use_default_material();
+
+        /*
+         * Rare VHS tracking disturbance.
+         *
+         * This is intentionally NOT permanent.
+         */
+        if self.tracking_timer > 0.0 {
+            let h = screen_height();
+
+            let y =
+                (
+                    self.elapsed * 510.0
+                ) % (h + 80.0)
+                    - 40.0;
+
+            draw_rectangle(
+                0.0,
+                y,
+                screen_width(),
+                3.0,
+                Color::new(
+                    0.35,
+                    1.0,
+                    0.42,
+                    0.075,
+                ),
+            );
+        }
+    }
+}
+
+
+/*
+ * ============================================================
+ * CRT SHADER
+ * ============================================================
+ *
+ * Macroquad automatically provides _Time.
+ *
+ * This is important:
+ * we intentionally don't create our own "time" uniform.
+ */
+
+const VERTEX_SHADER: &str = r#"
+#version 100
+
+attribute vec3 position;
+attribute vec2 texcoord;
+
+varying lowp vec2 uv;
+
+uniform mat4 Model;
+uniform mat4 Projection;
+
+void main() {
+    gl_Position =
+        Projection
+        * Model
+        * vec4(
+            position,
+            1.0
+        );
+
+    uv = texcoord;
+}
+"#;
+
+
+const FRAGMENT_SHADER: &str = r#"
+#version 100
+
+precision lowp float;
+
+varying lowp vec2 uv;
+
+/*
+ * Macroquad built-in time vector.
+ *
+ * _Time.x is used as the animated component.
+ */
+uniform vec4 _Time;
+
+uniform sampler2D Texture;
+
+
+void main() {
+
+    /*
+     * --------------------------------------------------------
+     * CRT BARREL DISTORTION
+     * --------------------------------------------------------
+     */
+
+    vec2 p =
+        uv * 2.0
+        - 1.0;
+
+    float r2 =
+        dot(p, p);
+
+    /*
+     * This is deliberately subtle.
+     *
+     * The goal isn't "fisheye lens".
+     * The goal is that the screen feels like
+     * it's physically behind curved glass.
+     */
+    p *=
+        1.0
+        + 0.055 * r2;
+
+    vec2 warped =
+        p * 0.5
+        + 0.5;
+
+
+    /*
+     * --------------------------------------------------------
+     * SAMPLE SCREEN
+     * --------------------------------------------------------
+     */
+
+    vec3 color =
+        texture2D(
+            Texture,
+            warped
+        ).rgb;
+
+
+    /*
+     * --------------------------------------------------------
+     * SCANLINES
+     * --------------------------------------------------------
+     */
+
+    float scan =
+        0.975
+        + 0.025
+        * sin(
+            warped.y * 900.0
+        );
+
+    color *= scan;
+
+
+    /*
+     * --------------------------------------------------------
+     * PHOSPHOR SHIMMER
+     * --------------------------------------------------------
+     */
+
+    float shimmer =
+        1.0
+        + 0.009
+        * sin(
+            _Time.x * 5.7
+        );
+
+    color *= shimmer;
+
+
+    /*
+     * --------------------------------------------------------
+     * GREEN CRT PHOSPHOR
+     * --------------------------------------------------------
+     */
+
+    color.r *= 0.88;
+    color.g *= 1.02;
+    color.b *= 0.88;
+
+
+    /*
+     * --------------------------------------------------------
+     * VIGNETTE
+     * --------------------------------------------------------
+     */
+
+    float vignette =
+        1.0
+        - smoothstep(
+            0.35,
+            1.10,
+            r2
+        );
+
+    color *=
+        0.80
+        + 0.20 * vignette;
+
+
+    /*
+     * --------------------------------------------------------
+     * DARK CURVED EDGES
+     * --------------------------------------------------------
+     */
+
+    float inside =
+        1.0
+        - smoothstep(
+            0.94,
+            1.10,
+            r2
+        );
+
+    color *= inside;
+
+
+    gl_FragColor =
+        vec4(
+            color,
+            1.0
+        );
+}
+"#;
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: src/audio.rs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+use macroquad::audio::{
+    load_sound,
+    play_sound,
+    PlaySoundParams,
+    Sound,
+};
+
+use std::collections::HashMap;
+
+pub struct AudioDirector {
+    sounds:
+        HashMap<String, Sound>,
+
+    ambient_started:
+        bool,
+}
+
+impl AudioDirector {
+    pub async fn new() -> Self {
+        let mut sounds =
+            HashMap::new();
+
+        for name in [
+            "hum",
+            "vent",
+            "click",
+            "relay",
+            "beep",
+            "glitch",
+        ] {
+            if let Ok(sound) =
+                load_sound(
+                    &format!(
+                        "assets/audio/{name}.wav"
+                    )
+                )
+                .await
+            {
+                sounds.insert(
+                    name.to_string(),
+                    sound,
+                );
+            }
+        }
+
+        Self {
+            sounds,
+            ambient_started:
+                false,
+        }
+    }
+
+    pub fn start_ambient(
+        &mut self,
+    ) {
+        if self.ambient_started {
+            return;
+        }
+
+        if let Some(sound) =
+            self.sounds.get("hum")
+        {
+            play_sound(
+                sound,
+                PlaySoundParams {
+                    looped: true,
+                    volume: 0.17,
+                },
+            );
+        }
+
+        if let Some(sound) =
+            self.sounds.get("vent")
+        {
+            play_sound(
+                sound,
+                PlaySoundParams {
+                    looped: true,
+                    volume: 0.085,
+                },
+            );
+        }
+
+        self.ambient_started =
+            true;
+    }
+
+    pub fn key_click(
+        &self,
+    ) {
+        if let Some(sound) =
+            self.sounds.get("click")
+        {
+            play_sound(
+                sound,
+                PlaySoundParams {
+                    looped: false,
+                    volume: 0.075,
+                },
+            );
+        }
+    }
+
+    pub fn command(
+        &self,
+    ) {
+        if let Some(sound) =
+            self.sounds.get("relay")
+        {
+            play_sound(
+                sound,
+                PlaySoundParams {
+                    looped: false,
+                    volume: 0.16,
+                },
+            );
+        }
+    }
+
+    pub fn anomaly(
+        &self,
+    ) {
+        if let Some(sound) =
+            self.sounds.get("glitch")
+        {
+            play_sound(
+                sound,
+                PlaySoundParams {
+                    looped: false,
+                    volume: 0.27,
+                },
+            );
+        }
+    }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: src/commands.rs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+use crate::{
+    engine::state::GameState,
+    ship::{
+        navigation,
+        Ship,
+    },
+};
+
+pub struct CommandResult {
+    pub lines:
+        Vec<String>,
+
+    pub clear:
+        bool,
+
+    pub resolved_diagnostic:
+        bool,
+}
+
+impl CommandResult {
+    fn text(
+        text: &str,
+    ) -> Self {
+        Self {
+            lines:
+                text.lines()
+                    .map(str::to_string)
+                    .collect(),
+
+            clear: false,
+
+            resolved_diagnostic:
+                false,
+        }
+    }
+
+    fn empty() -> Self {
+        Self {
+            lines:
+                Vec::new(),
+
+            clear: false,
+
+            resolved_diagnostic:
+                false,
+        }
+    }
+}
+
+fn parse_calibration(
+    args: &str,
+) -> Result<
+    (f32, f32),
+    CommandResult,
+> {
+    let parts:
+        Vec<&str> =
+        args.split_whitespace()
+            .collect();
+
+    if parts.len() != 2 {
+        return Err(
+            CommandResult::text(
+                "ERROR: INCORRECT ARGUMENTS\n\n\
+                 USAGE:\n\
+                   calibrate <RA_OFFSET> <DEC_OFFSET>\n\n\
+                 EXAMPLE:\n\
+                   calibrate +0.084 -0.031",
+            )
+        );
+    }
+
+    match (
+        parts[0].parse::<f32>(),
+        parts[1].parse::<f32>(),
+    ) {
+        (Ok(ra), Ok(dec)) =>
+            Ok((ra, dec)),
+
+        _ =>
+            Err(
+                CommandResult::text(
+                    "ERROR: INVALID CALIBRATION VALUES\n\n\
+                     EXPECTED:\n\
+                       NUMERIC OFFSET",
+                )
+            ),
+    }
+}
+
+pub fn execute(
+    input: &str,
+    ship: &mut Ship,
+    state: &mut GameState,
+) -> CommandResult {
+    let mut split =
+        input.trim()
+            .splitn(
+                2,
+                char::is_whitespace,
+            );
+
+    let command =
+        split.next()
+            .unwrap_or("")
+            .to_lowercase();
+
+    let args =
+        split.next()
+            .unwrap_or("")
+            .trim();
+
+    state.player.commands_run += 1;
+
+    match command.as_str() {
+        "" =>
+            CommandResult::empty(),
+
+        "help" =>
+            CommandResult::text(
+                "AVAILABLE COMMANDS\n\n\
+                 help        display this message\n\
+                 status      vessel status\n\
+                 diagnose    navigation diagnostics\n\
+                 nav         navigation information\n\
+                 tracker     star tracker information\n\
+                 calibrate   calibrate star tracker\n\
+                 lock        lock corrected course\n\
+                 depart      begin autonomous transit\n\
+                 engine      propulsion status\n\
+                 comms       communication status\n\
+                 scan        passive sensor scan\n\
+                 logs        system event log\n\
+                 clear       clear terminal\n\
+                 about       mission information",
+            ),
+
+        "status" =>
+            CommandResult::text(
+                &format!(
+                    "VESSEL STATUS\n\n\
+                     POWER.............. {}%\n\
+                     FUEL............... {}%\n\
+                     HULL............... {}%\n\
+                     LIFE SUPPORT....... NOMINAL\n\
+                     NAVIGATION......... {}\n\
+                     AUTOPILOT.......... {}\n\
+                     COMMS.............. ONLINE",
+                    ship.power,
+                    ship.fuel,
+                    ship.hull,
+
+                    if ship.mission_complete {
+                        "COMPLETE"
+                    } else if ship.navigation_calibrated {
+                        "CALIBRATED"
+                    } else {
+                        "FAULT"
+                    },
+
+                    if ship.course_locked {
+                        "READY"
+                    } else {
+                        "STANDBY"
+                    },
+                )
+            ),
+
+        "diagnose"
+        | "diag" => {
+            state.player
+                .diagnostics_run += 1;
+
+            state.diagnostic_attention =
+                false;
+
+            CommandResult {
+                lines:
+                    "NAVIGATION DIAGNOSTICS\n\n\
+                     INERTIAL PLATFORM.............. OK\n\
+                     STAR TRACKER................... WARNING\n\
+                     NAV COMPUTER................... OK\n\
+                     COURSE DATABASE................ OK\n\
+                     AUTOPILOT...................... STANDBY\n\n\
+                     STAR TRACKER REPORT:\n\n\
+                       RIGHT ASCENSION OFFSET: +0.084°\n\
+                       DECLINATION OFFSET:     -0.031°\n\
+                       SENSOR CONFIDENCE:      61%\n\n\
+                     RECOMMENDATION:\n\n\
+                       CALIBRATE STAR TRACKER\n\
+                       BEFORE COURSE LOCK"
+                        .lines()
+                        .map(
+                            str::to_string
+                        )
+                        .collect(),
+
+                clear: false,
+
+                resolved_diagnostic:
+                    true,
+            }
+        }
+
+        "tracker" => {
+            if ship.navigation_calibrated {
+                CommandResult::text(
+                    "STAR TRACKER\n\n\
+                     STATUS................. CALIBRATED\n\
+                     RA OFFSET.............. +0.000°\n\
+                     DEC OFFSET............. +0.000°\n\
+                     CONFIDENCE............. 99.8%",
+                )
+            } else {
+                CommandResult::text(
+                    "STAR TRACKER\n\n\
+                     STATUS................. OUT OF CALIBRATION\n\
+                     RA OFFSET.............. +0.084°\n\
+                     DEC OFFSET............. -0.031°\n\
+                     CONFIDENCE............. 61%\n\n\
+                     USE:\n\
+                       CALIBRATE +0.084 -0.031",
+                )
+            }
+        }
+
+        "calibrate" => {
+            if ship.navigation_calibrated {
+                return CommandResult::text(
+                    "STAR TRACKER ALREADY CALIBRATED.",
+                );
+            }
+
+            let (ra, dec) =
+                match parse_calibration(
+                    args
+                ) {
+                    Ok(values) =>
+                        values,
+
+                    Err(error) =>
+                        return error,
+                };
+
+            if navigation::calibration_matches(
+                ra,
+                dec,
+            ) {
+                ship.navigation_calibrated =
+                    true;
+
+                CommandResult::text(
+                    "CALIBRATION ROUTINE\n\n\
+                     REFERENCE.............. SOL-PRIMARY\n\
+                     APPLYING RA OFFSET..... +0.084°\n\
+                     APPLYING DEC OFFSET.... -0.031°\n\n\
+                     STAR FIELD MATCH........ OK\n\
+                     GYRO CROSSCHECK......... OK\n\
+                     RESIDUAL ERROR.......... 0.0007°\n\n\
+                     CALIBRATION COMPLETE.\n\n\
+                     COURSE LOCK IS NOW AVAILABLE.",
+                )
+            } else {
+                CommandResult::text(
+                    "CALIBRATION REJECTED\n\n\
+                     REFERENCE MATCH......... FAILED\n\
+                     RESIDUAL ERROR.......... ABOVE LIMIT\n\n\
+                     No changes were committed.\n\n\
+                     USE 'TRACKER' TO REVIEW\n\
+                     THE REQUIRED CALIBRATION VALUES.",
+                )
+            }
+        }
+
+        "lock" => {
+            if !ship.navigation_calibrated {
+                CommandResult::text(
+                    "ERROR: STAR TRACKER NOT CALIBRATED.\n\n\
+                     RUN 'DIAGNOSE'\n\
+                     THEN 'TRACKER'.",
+                )
+            } else {
+                ship.course_locked =
+                    true;
+
+                CommandResult::text(
+                    "COURSE SOLUTION\n\n\
+                     VECTOR................. VALID\n\
+                     STAR REFERENCE......... LOCKED\n\
+                     FUEL MARGIN............ 31.4%\n\
+                     COLLISION CHECK........ CLEAR\n\n\
+                     COURSE LOCKED.\n\n\
+                     AUTOPILOT IS READY.\n\n\
+                     TYPE 'DEPART'\n\
+                     TO BEGIN TRANSIT.",
+                )
+            }
+        }
+
+        "depart" => {
+            if !ship.course_locked {
+                CommandResult::text(
+                    "ERROR: NO VERIFIED COURSE.\n\n\
+                     CALIBRATE THE STAR TRACKER\n\
+                     AND USE 'LOCK'.",
+                )
+            } else {
+                ship.mission_complete =
+                    true;
+
+                ship.fuel = 94;
+
+                CommandResult::text(
+                    "AUTOPILOT DEPARTURE SEQUENCE\n\n\
+                     THRUST VECTOR........... CONFIRMED\n\
+                     COURSE.................. WAYPOINT-01\n\
+                     BURN WINDOW............. OPEN\n\
+                     AUTOPILOT................ ENGAGED\n\n\
+                     TRANSIT INITIATED.\n\n\
+                     [MISSION 01 COMPLETE]\n\n\
+                     WAYPOINT-01 ARRIVAL CONFIRMED.",
+                )
+            }
+        }
+
+        "nav" =>
+            if ship.mission_complete {
+                CommandResult::text(
+                    "NAVIGATION\n\n\
+                     CURRENT POSITION:\n\
+                       WAYPOINT-01\n\n\
+                     COURSE:\n\
+                       COMPLETE",
+                )
+            } else if ship.course_locked {
+                CommandResult::text(
+                    "NAVIGATION\n\n\
+                     CURRENT POSITION:\n\
+                       SOL SYSTEM / OUTBOUND VECTOR\n\n\
+                     DESTINATION:\n\
+                       WAYPOINT-01\n\n\
+                     DISTANCE:\n\
+                       4.81 AU\n\n\
+                     COURSE:\n\
+                       CORRECTED / LOCKED",
+                )
+            } else {
+                CommandResult::text(
+                    "NAVIGATION\n\n\
+                     CURRENT POSITION:\n\
+                       SOL SYSTEM / OUTBOUND VECTOR\n\n\
+                     DESTINATION:\n\
+                       WAYPOINT-01\n\n\
+                     DISTANCE:\n\
+                       4.81 AU\n\n\
+                     COURSE:\n\
+                       INVALID / UNVERIFIED",
+                )
+            },
+
+        "engine" =>
+            CommandResult::text(
+                "PROPULSION\n\n\
+                 PRIMARY DRIVE........ ONLINE\n\
+                 THRUST................ 18.4 kN\n\
+                 REACTOR OUTPUT........ 41%\n\
+                 THERMAL LOAD.......... 23%\n\
+                 FUEL FLOW............. NOMINAL",
+            ),
+
+        "comms" => {
+            state.player.comms_run += 1;
+
+            CommandResult::text(
+                "COMMUNICATIONS\n\n\
+                 UPLINK................ ACTIVE\n\
+                 DOWNLINK.............. ACTIVE\n\
+                 SIGNAL................ GOOD\n\n\
+                 LAST CONTACT:\n\n\
+                   MISSION CONTROL\n\
+                   17 MINUTES AGO\n\n\
+                 LATENCY:\n\
+                   8.42 SECONDS",
+            )
+        }
+
+        "scan" => {
+            state.player.scans_run += 1;
+
+            CommandResult::text(
+                "PASSIVE SENSOR SCAN\n\n\
+                 LOCAL SPACE:\n\
+                   CLEAR\n\n\
+                 THERMAL SIGNATURES:\n\
+                   NONE\n\n\
+                 ARTIFICIAL EMISSIONS:\n\
+                   NONE\n\n\
+                 NAVIGATION HAZARDS:\n\
+                   NONE\n\n\
+                 SCAN COMPLETE",
+            )
+        }
+
+        "logs" => {
+            state.player.logs_run += 1;
+
+            CommandResult::text(
+                "SYSTEM LOG\n\n\
+                 [14:02:11] AUTOPILOT ENABLED\n\
+                 [14:02:14] COURSE LOCKED\n\
+                 [14:03:02] STAR TRACKER SYNCHRONIZED\n\
+                 [14:07:31] MINOR THERMAL VARIATION\n\
+                 [14:08:04] CORRECTION BURN COMPLETE\n\
+                 [14:12:48] SENSOR ARRAY ONLINE\n\
+                 [14:19:03] UPLINK HANDSHAKE COMPLETE",
+            )
+        }
+
+        "clear" =>
+            CommandResult {
+                lines:
+                    Vec::new(),
+
+                clear: true,
+
+                resolved_diagnostic:
+                    false,
+            },
+
+        "about" =>
+            CommandResult::text(
+                "AURORA-17\n\n\
+                 AUTONOMOUS DEEP SPACE\n\
+                 RESEARCH VESSEL\n\n\
+                 RUNTIME BUILD:\n\
+                   0.5.0\n\n\
+                 THE TERMINAL IS THE INTERFACE.\n\
+                 THE TERMINAL IS NOT THE SHIP.",
+            ),
+
+        _ =>
+            CommandResult::text(
+                &format!(
+                    "ERROR: UNKNOWN COMMAND\n\n\
+                     INPUT:\n\
+                       {}\n\n\
+                     TYPE 'HELP'\n\
+                     FOR AVAILABLE COMMANDS.",
+                    input.trim(),
+                )
+            ),
+    }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: src/engine/mod.rs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+pub mod events;
+pub mod rng;
+pub mod scheduler;
+pub mod state;
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: src/engine/events.rs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+use super::state::GameState;
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum EventKind {
+    AmbientShift,
+    Communications,
+    ClockDesync,
+    PhantomLog,
+    SensorFlicker,
+    PowerTransient,
+}
+
+impl EventKind {
+    pub fn id(self) -> u8 {
+        match self {
+            Self::AmbientShift => 0,
+            Self::Communications => 1,
+            Self::ClockDesync => 2,
+            Self::PhantomLog => 3,
+            Self::SensorFlicker => 4,
+            Self::PowerTransient => 5,
+        }
+    }
+
+    pub fn diagnostic(self) -> bool {
+        matches!(
+            self,
+            Self::Communications
+                | Self::ClockDesync
+                | Self::PowerTransient
+        )
+    }
+}
+
+pub struct Event {
+    pub kind: EventKind,
+    pub title: &'static str,
+    pub lines: Vec<&'static str>,
+}
+
+pub fn choose_event(
+    state: &mut GameState,
+) -> Option<Event> {
+    if state.play_time
+        < state.next_event_time
+    {
+        return None;
+    }
+
+    /*
+     * The event scheduler is intentionally sparse.
+     *
+     * We do not want the player to perceive
+     * a predictable "event every X seconds"
+     * rhythm.
+     */
+
+    let candidates = [
+        EventKind::AmbientShift,
+        EventKind::Communications,
+        EventKind::ClockDesync,
+        EventKind::PhantomLog,
+        EventKind::SensorFlicker,
+        EventKind::PowerTransient,
+    ];
+
+    let mut valid =
+        Vec::new();
+
+    for kind in candidates {
+        if !state.was_recent(kind.id()) {
+            valid.push(kind);
+        }
+    }
+
+    if valid.is_empty() {
+        return None;
+    }
+
+    let index =
+        (
+            state.rng.next_u64()
+                as usize
+        )
+        % valid.len();
+
+    let kind = valid[index];
+
+    state.remember_event(
+        kind.id(),
+    );
+
+    state.last_event_time =
+        state.play_time;
+
+    /*
+     * Long and deliberately irregular
+     * cooldown.
+     */
+    state.next_event_time =
+        state.play_time
+            + state.rng.range_f32(
+                85.0,
+                190.0,
+            );
+
+    state.player.events_seen += 1;
+
+    state.diagnostic_attention =
+        kind.diagnostic();
+
+    Some(match kind {
+        EventKind::AmbientShift =>
+            Event {
+                kind,
+
+                title:
+                    "AMBIENT SYSTEM SHIFT",
+
+                lines: vec![
+                    "",
+                    "AUDIO MONITOR",
+                    "VENTILATION RPM......... +2.1%",
+                    "VENTILATION RPM......... NOMINAL",
+                ],
+            },
+
+        EventKind::Communications =>
+            Event {
+                kind,
+
+                title:
+                    "COMMUNICATIONS TRANSIENT",
+
+                lines: vec![
+                    "",
+                    "COMMUNICATIONS",
+                    "SILENT INTERVAL DETECTED",
+                    "SIGNAL................ DEGRADED",
+                    "SIGNAL................ RESTORED",
+                ],
+            },
+
+        EventKind::ClockDesync =>
+            Event {
+                kind,
+
+                title:
+                    "CLOCK SYNCHRONIZATION WARNING",
+
+                lines: vec![
+                    "",
+                    "TIME SERVICE",
+                    "LOCAL CLOCK............. OUT OF SYNC",
+                    "REFERENCE CLOCK......... UNAVAILABLE",
+                ],
+            },
+
+        EventKind::PhantomLog =>
+            Event {
+                kind,
+
+                title:
+                    "LOG BUFFER NOTICE",
+
+                lines: vec![
+                    "",
+                    "SYSTEM LOG",
+                    "BUFFER CHECKSUM......... WARNING",
+                    "REPEATED ENTRY DETECTED",
+                ],
+            },
+
+        EventKind::SensorFlicker =>
+            Event {
+                kind,
+
+                title:
+                    "SENSOR TELEMETRY TRANSIENT",
+
+                lines: vec![
+                    "",
+                    "PASSIVE SENSOR ARRAY",
+                    "THERMAL SIGNATURE........ 1",
+                    "THERMAL SIGNATURE........ NONE",
+                    "SENSOR STATE.............. NOMINAL",
+                ],
+            },
+
+        EventKind::PowerTransient => {
+            state.power_instability =
+                1.0;
+
+            Event {
+                kind,
+
+                title:
+                    "POWER BUS TRANSIENT",
+
+                lines: vec![
+                    "",
+                    "POWER DISTRIBUTION",
+                    "BUS VOLTAGE.............. UNSTABLE",
+                    "BUS VOLTAGE.............. NOMINAL",
+                    "POWER SYSTEM.............. NOMINAL",
+                ],
+            }
+        }
+    })
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: src/engine/rng.rs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#[derive(Clone)]
+pub struct Rng {
+    state: u64,
+}
+
+impl Rng {
+    pub fn new(seed: u64) -> Self {
+        Self {
+            state: if seed == 0 {
+                0xA17A2026
+            } else {
+                seed
+            },
+        }
+    }
+
+    pub fn next_u64(&mut self) -> u64 {
+        let mut x = self.state;
+
+        x ^= x >> 12;
+        x ^= x << 25;
+        x ^= x >> 27;
+
+        self.state = x;
+
+        x.wrapping_mul(
+            0x2545_F491_4F6C_DD1D
+        )
+    }
+
+    pub fn next_f32(&mut self) -> f32 {
+        self.next_u64() as f32
+            / u64::MAX as f32
+    }
+
+    pub fn range_f32(
+        &mut self,
+        min: f32,
+        max: f32,
+    ) -> f32 {
+        min + self.next_f32()
+            * (max - min)
+    }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: src/engine/scheduler.rs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+use super::{
+    events::{self, Event},
+    state::GameState,
+};
+
+pub struct EventScheduler;
+
+impl EventScheduler {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub fn update(
+        &mut self,
+        state: &mut GameState,
+    ) -> Option<Event> {
+        events::choose_event(state)
+    }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: src/engine/state.rs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+use super::rng::Rng;
+
+pub struct PlayerProfile {
+    pub commands_run: u64,
+    pub diagnostics_run: u64,
+    pub logs_run: u64,
+    pub scans_run: u64,
+    pub comms_run: u64,
+
+    pub events_seen: u64,
+}
+
+impl PlayerProfile {
+    pub fn new() -> Self {
+        Self {
+            commands_run: 0,
+            diagnostics_run: 0,
+            logs_run: 0,
+            scans_run: 0,
+            comms_run: 0,
+            events_seen: 0,
+        }
+    }
+}
+
+pub struct GameState {
+    pub rng: Rng,
+
+    pub play_time: f32,
+
+    pub player: PlayerProfile,
+
+    pub diagnostic_attention: bool,
+
+    pub power_instability: f32,
+
+    pub last_event_time: f32,
+
+    pub next_event_time: f32,
+
+    pub event_history: Vec<u8>,
+}
+
+impl GameState {
+    pub fn new(seed: u64) -> Self {
+        let mut rng =
+            Rng::new(seed);
+
+        Self {
+            rng: rng.clone(),
+
+            play_time: 0.0,
+
+            player:
+                PlayerProfile::new(),
+
+            diagnostic_attention:
+                false,
+
+            power_instability:
+                0.0,
+
+            last_event_time:
+                -999.0,
+
+            next_event_time:
+                rng.range_f32(
+                    90.0,
+                    150.0,
+                ),
+
+            event_history:
+                Vec::new(),
+        }
+    }
+
+    pub fn tick(&mut self, dt: f32) {
+        self.play_time += dt;
+
+        self.power_instability =
+            (
+                self.power_instability
+                    - dt * 0.006
+            )
+            .max(0.0);
+    }
+
+    pub fn remember_event(
+        &mut self,
+        id: u8,
+    ) {
+        self.event_history.push(id);
+
+        if self.event_history.len() > 8 {
+            self.event_history.remove(0);
+        }
+    }
+
+    pub fn was_recent(
+        &self,
+        id: u8,
+    ) -> bool {
+        self.event_history
+            .iter()
+            .rev()
+            .take(4)
+            .any(|value| *value == id)
+    }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: src/ship/mod.rs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+pub mod navigation;
+
+#[derive(Clone)]
+pub struct Ship {
+    pub power: u8,
+    pub fuel: u8,
+    pub hull: u8,
+
+    pub navigation_calibrated:
+        bool,
+
+    pub course_locked:
+        bool,
+
+    pub mission_complete:
+        bool,
+}
+
+impl Ship {
+    pub fn new() -> Self {
+        Self {
+            power: 100,
+            fuel: 98,
+            hull: 100,
+
+            navigation_calibrated:
+                false,
+
+            course_locked:
+                false,
+
+            mission_complete:
+                false,
+        }
+    }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: src/ship/navigation.rs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+pub fn calibration_matches(
+    ra: f32,
+    dec: f32,
+) -> bool {
+    (ra - 0.084).abs()
+        < 0.0005
+        &&
+    (dec + 0.031).abs()
+        < 0.0005
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: src/terminal/mod.rs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+pub mod terminal;
+
+pub use terminal::Terminal;
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FILE: src/terminal/terminal.rs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+use macroquad::prelude::*;
+
+const GREEN: Color =
+    Color::new(
+        0.18,
+        1.0,
+        0.28,
+        0.94,
+    );
+
+pub struct InputResult {
+    pub command:
+        Option<String>,
+
+    pub key_pressed:
+        bool,
+}
+
+struct QueuedLine {
+    text: String,
+    visible: usize,
+    accumulator: f32,
+    speed: f32,
+}
+
+pub struct Terminal {
+    pub lines:
+        Vec<String>,
+
+    pub input:
+        String,
+
+    history:
+        Vec<String>,
+
+    history_position:
+        Option<usize>,
+
+    queue:
+        Vec<QueuedLine>,
+
+    cursor_timer:
+        f32,
+
+    scroll:
+        f32,
+
+    rng:
+        u32,
+}
+
+impl Terminal {
+    pub fn new() -> Self {
+        Self {
+            lines:
+                Vec::new(),
+
+            input:
+                String::new(),
+
+            history:
+                Vec::new(),
+
+            history_position:
+                None,
+
+            queue:
+                Vec::new(),
+
+            cursor_timer:
+                0.0,
+
+            scroll:
+                0.0,
+
+            rng:
+                0xA17C2026,
+        }
+    }
+
+    pub fn print(
+        &mut self,
+        lines: &[&str],
+    ) {
+        for line in lines {
+            self.lines.push(
+                (*line).to_string(),
+            );
+        }
+    }
+
+    pub fn clear(
+        &mut self,
+    ) {
+        self.lines.clear();
+        self.queue.clear();
+        self.scroll = 0.0;
+    }
+
+    pub fn queue(
+        &mut self,
+        lines: &[String],
+    ) {
+        for line in lines {
+            self.queue.push(
+                QueuedLine {
+                    text:
+                        line.clone(),
+
+                    visible: 0,
+
+                    accumulator:
+                        0.0,
+
+                    speed:
+                        if line.is_empty() {
+                            0.0
+                        } else {
+                            0.009
+                        },
+                },
+            );
+        }
+    }
+
+    fn update_output(
+        &mut self,
+    ) {
+        if let Some(line) =
+            self.queue.first_mut()
+        {
+            let count =
+                line.text
+                    .chars()
+                    .count();
+
+            if line.visible < count {
+                line.accumulator +=
+                    get_frame_time();
+
+                let step =
+                    (
+                        line.accumulator
+                            / line.speed
+                    )
+                    .floor()
+                    as usize;
+
+                if step > 0 {
+                    line.accumulator -=
+                        step as f32
+                            * line.speed;
+
+                    line.visible =
+                        (
+                            line.visible
+                                + step
+                        )
+                        .min(count);
+                }
+            } else {
+                let done =
+                    self.queue
+                        .remove(0);
+
+                self.lines.push(
+                    done.text,
+                );
+            }
+        }
+    }
+
+    pub fn update_input(
+        &mut self,
+    ) -> InputResult {
+        self.cursor_timer +=
+            get_frame_time();
+
+        self.update_output();
+
+        let mut key_pressed =
+            false;
+
+        let wheel =
+            mouse_wheel().1;
+
+        if wheel.abs() > 0.01 {
+            self.scroll =
+                (
+                    self.scroll
+                        + wheel * 3.0
+                )
+                .max(0.0);
+        }
+
+        while let Some(c) =
+            get_char_pressed()
+        {
+            if !c.is_control() {
+                self.input.push(c);
+                key_pressed = true;
+            }
+        }
+
+        if is_key_pressed(
+            KeyCode::Backspace
+        ) {
+            self.input.pop();
+            key_pressed = true;
+        }
+
+        if is_key_pressed(
+            KeyCode::Enter
+        ) {
+            let command =
+                self.input
+                    .trim()
+                    .to_string();
+
+            self.lines.push(
+                format!(
+                    "> {}",
+                    self.input
+                ),
+            );
+
+            if !command.is_empty() {
+                self.history.push(
+                    command.clone(),
+                );
+            }
+
+            self.input.clear();
+
+            self.history_position =
+                None;
+
+            return InputResult {
+                command:
+                    Some(command),
+
+                key_pressed:
+                    true,
+            };
+        }
+
+        if is_key_pressed(
+            KeyCode::Up
+        )
+            && !self.history.is_empty()
+        {
+            let index =
+                match self.history_position {
+                    None =>
+                        self.history.len()
+                            - 1,
+
+                    Some(0) => 0,
+
+                    Some(value) =>
+                        value - 1,
+                };
+
+            self.history_position =
+                Some(index);
+
+            self.input =
+                self.history[index]
+                    .clone();
+        }
+
+        if is_key_pressed(
+            KeyCode::Down
+        ) {
+            if let Some(index) =
+                self.history_position
+            {
+                if index + 1
+                    < self.history.len()
+                {
+                    let next =
+                        index + 1;
+
+                    self.history_position =
+                        Some(next);
+
+                    self.input =
+                        self.history[next]
+                            .clone();
+                } else {
+                    self.history_position =
+                        None;
+
+                    self.input.clear();
+                }
+            }
+        }
+
+        if is_key_pressed(
+            KeyCode::PageUp
+        ) {
+            self.scroll += 8.0;
+        }
+
+        if is_key_pressed(
+            KeyCode::PageDown
+        ) {
+            self.scroll =
+                (
+                    self.scroll - 8.0
+                )
+                .max(0.0);
+        }
+
+        InputResult {
+            command: None,
+            key_pressed,
+        }
+    }
+
+    fn noise(
+        &mut self,
+    ) -> f32 {
+        self.rng ^=
+            self.rng << 13;
+
+        self.rng ^=
+            self.rng >> 17;
+
+        self.rng ^=
+            self.rng << 5;
+
+        self.rng as f32
+            / u32::MAX as f32
+    }
+
+    pub fn draw_terminal(
+        &mut self,
+        elapsed: f32,
+        attention: bool,
+    ) {
+        let width =
+            screen_width();
+
+        let height =
+            screen_height();
+
+        clear_background(
+            Color::new(
+                0.003,
+                0.008,
+                0.004,
+                1.0,
+            ),
+        );
+
+        let brightness =
+            if self.noise() > 0.993 {
+                0.84
+            } else if self.noise() > 0.94 {
+                0.96
+            } else {
+                1.0
+            };
+
+        let font_size =
+            20.0;
+
+        let line_height =
+            font_size * 1.35;
+
+        let top = 58.0;
+
+        let bottom =
+            height - 62.0;
+
+        let max_lines =
+            (
+                (bottom - top)
+                    / line_height
+            )
+            .floor()
+            as usize;
+
+        let total =
+            self.lines.len()
+                + usize::from(
+                    !self.queue.is_empty()
+                );
+
+        let start =
+            total.saturating_sub(
+                max_lines
+                    + self.scroll
+                        as usize,
+            );
+
+        let end =
+            (
+                start
+                    + max_lines
+            )
+            .min(total);
+
+        for index in start..end {
+            let y =
+                top
+                    + (
+                        index - start
+                    ) as f32
+                        * line_height;
+
+            let text =
+                if index
+                    < self.lines.len()
+                {
+                    self.lines[index]
+                        .clone()
+                } else {
+                    self.queue
+                        .first()
+                        .map(|q| {
+                            q.text
+                                .chars()
+                                .take(
+                                    q.visible
+                                )
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                };
+
+            draw_text_ex(
+                &text,
+                34.5,
+                y + 0.5,
+                TextParams {
+                    font_size:
+                        font_size as u16,
+
+                    color:
+                        Color::new(
+                            GREEN.r,
+                            GREEN.g,
+                            GREEN.b,
+                            0.10,
+                        ),
+
+                    ..Default::default()
+                },
+            );
+
+            draw_text_ex(
+                &text,
+                34.0,
+                y,
+                TextParams {
+                    font_size:
+                        font_size as u16,
+
+                    color:
+                        Color::new(
+                            GREEN.r,
+                            GREEN.g,
+                            GREEN.b,
+                            0.92
+                                * brightness,
+                        ),
+
+                    ..Default::default()
+                },
+            );
+        }
+
+        let prompt =
+            format!(
+                "> {}",
+                self.input
+            );
+
+        draw_text_ex(
+            &prompt,
+            34.0,
+            height - 28.0,
+            TextParams {
+                font_size:
+                    font_size as u16,
+
+                color:
+                    Color::new(
+                        GREEN.r,
+                        GREEN.g,
+                        GREEN.b,
+                        brightness,
+                    ),
+
+                ..Default::default()
+            },
+        );
+
+        if self.cursor_timer
+            % 1.0
+            < 0.55
+        {
+            let width =
+                measure_text(
+                    &prompt,
+                    None,
+                    font_size as u16,
+                    1.0,
+                )
+                .width;
+
+            draw_rectangle(
+                36.0 + width,
+                height
+                    - font_size
+                    - 25.0,
+                11.0,
+                font_size + 2.0,
+                Color::new(
+                    GREEN.r,
+                    GREEN.g,
+                    GREEN.b,
+                    0.8
+                        * brightness,
+                ),
+            );
+        }
+
+        draw_text_ex(
+            "AURORA-17 // REMOTE OPERATIONS TERMINAL",
+            34.0,
+            40.0,
+            TextParams {
+                font_size: 15,
+                color:
+                    Color::new(
+                        GREEN.r,
+                        GREEN.g,
+                        GREEN.b,
+                        0.75
+                            * brightness,
+                    ),
+                ..Default::default()
+            },
+        );
+
+        if attention {
+            let x =
+                width - 300.0;
+
+            let y = 34.0;
+
+            draw_rectangle(
+                x,
+                y,
+                266.0,
+                54.0,
+                Color::new(
+                    0.01,
+                    0.04,
+                    0.015,
+                    0.88,
+                ),
+            );
+
+            draw_rectangle_lines(
+                x,
+                y,
+                266.0,
+                54.0,
+                1.0,
+                Color::new(
+                    GREEN.r,
+                    GREEN.g,
+                    GREEN.b,
+                    0.72,
+                ),
+            );
+
+            draw_text_ex(
+                "[ ! ] DIAGNOSTIC ATTENTION",
+                x + 12.0,
+                y + 22.0,
+                TextParams {
+                    font_size: 15,
+                    color: GREEN,
+                    ..Default::default()
+                },
+            );
+
+            draw_text_ex(
+                "RUN DIAGNOSE",
+                x + 12.0,
+                y + 42.0,
+                TextParams {
+                    font_size: 12,
+                    color:
+                        Color::new(
+                            GREEN.r,
+                            GREEN.g,
+                            GREEN.b,
+                            0.72,
+                        ),
+                    ..Default::default()
+                },
+            );
+        }
+
+        // Very subtle refresh lines.
+        let phase =
+            (elapsed * 48.0)
+                % 4.0;
+
+        let mut y =
+            phase - 4.0;
+
+        while y < height {
+            draw_rectangle(
+                0.0,
+                y,
+                width,
+                1.0,
+                Color::new(
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.11,
+                ),
+            );
+
+            y += 4.0;
+        }
+
+        // Rare tiny flicker.
+        if self.noise() > 0.997 {
+            draw_rectangle(
+                0.0,
+                0.0,
+                width,
+                height,
+                Color::new(
+                    0.2,
+                    0.9,
+                    0.25,
+                    0.035,
+                ),
+            );
+        }
+
+        // CRT edge darkening.
+        let edge = 55.0;
+
+        draw_rectangle(
+            0.0,
+            0.0,
+            width,
+            edge,
+            Color::new(
+                0.0,
+                0.0,
+                0.0,
+                0.20,
+            ),
+        );
+
+        draw_rectangle(
+            0.0,
+            height - edge,
+            width,
+            edge,
+            Color::new(
+                0.0,
+                0.0,
+                0.0,
+                0.20,
+            ),
+        );
+
+        draw_rectangle(
+            0.0,
+            0.0,
+            edge,
+            height,
+            Color::new(
+                0.0,
+                0.0,
+                0.0,
+                0.16,
+            ),
+        );
+
+        draw_rectangle(
+            width - edge,
+            0.0,
+            edge,
+            height,
+            Color::new(
+                0.0,
+                0.0,
+                0.0,
+                0.16,
+            ),
+        );
+    }
+}
